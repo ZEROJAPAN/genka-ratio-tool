@@ -252,6 +252,49 @@
 </style>
 </head>
 <body>
+<div id="lock-screen" style="position:fixed;inset:0;background:#1F3864;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:'Yu Gothic','Hiragino Sans',sans-serif;">
+  <div style="background:#fff;border-radius:12px;padding:36px 32px;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.3);text-align:center;">
+    <div style="font-size:15px;font-weight:bold;color:#1F3864;margin-bottom:14px;">カテゴリ別 原価率分析ツール</div>
+    <div style="font-size:12.5px;color:#5B6577;margin-bottom:16px;">パスワードを入力してください</div>
+    <input type="password" id="lock-pw" style="width:100%;padding:9px 10px;border:1px solid #DCE2EC;border-radius:6px;font-size:14px;box-sizing:border-box;margin-bottom:10px;" placeholder="パスワード">
+    <button id="lock-btn" style="width:100%;background:#1F3864;color:#fff;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:bold;cursor:pointer;">開く</button>
+    <div id="lock-msg" style="color:#9C0006;font-size:12px;margin-top:10px;min-height:14px;"></div>
+  </div>
+</div>
+<script>
+(function(){
+  // ごく簡易的な入室制限です。ページのソースを見れば誰でも突破できるため、
+  // 本当に機密性が必要なデータには使わないでください。
+   var PASSWORD_HASH_TARGET = "4eb48c72cba00110b9f0e7e4f6dfc6f4a0140fd8"; // パスワード: zero2002
+
+  async function sha1Hex(msg){
+    var enc = new TextEncoder().encode(msg);
+    var buf = await crypto.subtle.digest('SHA-1', enc);
+    var arr = Array.from(new Uint8Array(buf));
+    return arr.map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  }
+
+  document.getElementById('lock-btn').addEventListener('click', tryUnlock);
+  document.getElementById('lock-pw').addEventListener('keydown', function(e){ if(e.key==='Enter') tryUnlock(); });
+
+  async function tryUnlock(){
+    var pw = document.getElementById('lock-pw').value;
+    var h = await sha1Hex(pw);
+    if(h === PASSWORD_HASH_TARGET){
+      document.getElementById('lock-screen').style.display='none';
+      try{ sessionStorage.setItem('crt_unlocked','1'); }catch(e){}
+    } else {
+      document.getElementById('lock-msg').textContent = 'パスワードが違います';
+    }
+  }
+  try{
+    if(sessionStorage.getItem('crt_unlocked')==='1'){
+      document.getElementById('lock-screen').style.display='none';
+    }
+  }catch(e){}
+})();
+</script>
+
 <div class="wrap">
 
 <header>
