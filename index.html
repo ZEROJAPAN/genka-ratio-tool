@@ -953,6 +953,22 @@ document.getElementById('file-history').addEventListener('change', e=>{
   reader.readAsText(file);
 });
 
+function monthToIndex(m){ const [y,mo] = m.split('-').map(Number); return y*12+(mo-1); }
+function yymm(m){ return m.slice(2,4)+m.slice(5,7); }
+function isContiguousMonths(monthsSorted){
+  const idxs = monthsSorted.map(monthToIndex);
+  for(let i=1;i<idxs.length;i++){ if(idxs[i]!==idxs[i-1]+1) return false; }
+  return true;
+}
+function buildHistoryFilename(historyObj){
+  const months = Object.keys(historyObj).sort();
+  if(months.length===0) return '原価率推移履歴.json';
+  if(months.length===1) return `原価率推移履歴${yymm(months[0])}_.json`;
+  const contiguous = isContiguousMonths(months);
+  const first = yymm(months[0]), last = yymm(months[months.length-1]);
+  return `原価率推移履歴${first}_${last}${contiguous ? '' : 'gap'}.json`;
+}
+
 document.getElementById('btn-confirm').addEventListener('click', ()=>{
   if(!window.__lastRows){ return; }
   const month = document.getElementById('confirm-month').value; // "YYYY-MM"
@@ -973,7 +989,7 @@ document.getElementById('btn-confirm').addEventListener('click', ()=>{
   const blob = new Blob([JSON.stringify(window.__history, null, 1)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `原価率推移履歴.json`;
+  a.download = buildHistoryFilename(window.__history);
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 
   document.getElementById('confirm-msg').textContent = `${month} を確定し、履歴ファイルを保存しました。`;
