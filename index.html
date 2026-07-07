@@ -352,14 +352,46 @@
   </details>
 </div>
 
+<div class="card">
+  <h2>📈 月次推移表（任意）</h2>
+  <p class="sub" style="margin:0 0 10px;">確定した月の原価率を保存しておき、店舗×カテゴリー別の推移を確認できます。このツールはサーバーを持たないため、履歴は「ファイル」として保存・読み込みします。</p>
+  <div class="sheet-row" style="margin-top:0;">
+    <label>これまでの履歴ファイル（任意・お持ちの場合）
+      <input type="file" id="file-history" accept=".json" style="padding:4px;">
+    </label>
+    <span id="history-status" class="status-ok"></span>
+  </div>
+</div>
+
 <div class="calcbar">
   <button class="primary" id="btn-calc" disabled>計算する</button>
   <button class="secondary" id="btn-download" style="display:none;">結果をExcelでダウンロード</button>
   <span class="calc-msg" id="calc-msg">まずPL表・在庫表の両方をアップロードしてください</span>
 </div>
 
+<div class="card" id="confirm-card" style="display:none;">
+  <h2>この月を確定して履歴に保存</h2>
+  <div class="sheet-row" style="margin-top:0;">
+    <label>対象年月
+      <input type="month" id="confirm-month">
+    </label>
+    <button class="secondary" id="btn-confirm">この月を確定してJSON保存</button>
+    <span class="calc-msg" id="confirm-msg"></span>
+  </div>
+</div>
+
 <div id="error-area"></div>
 <div id="results"></div>
+
+<div class="card" id="trend-card" style="display:none;">
+  <h2>📈 店舗×カテゴリー 原価率の月次推移</h2>
+  <div class="sheet-row" style="margin-top:0;">
+    <label>店舗で絞り込み
+      <select id="trend-store-filter"></select>
+    </label>
+  </div>
+  <div id="trend-table-area" style="margin-top:12px;"></div>
+</div>
 
 <p class="footnote" id="global-footnote"></p>
 
@@ -893,6 +925,119 @@ function exportExcel(){
 document.getElementById('btn-download').addEventListener('click', exportExcel);
 
 
+// ---------- 月次履歴・推移表 ----------
+window.__history = {}; // { "2026-05": { "店舗名": { "地金":0.61, ... }, ... }, ... }
+
+function refreshHistoryStatus(){
+  const months = Object.keys(window.__history).sort();
+  const el = document.getElementById('history-status');
+  if(months.length===0){ el.textContent=''; return; }
+  el.textContent = `読み込み済み: ${months.join(', ')}`;
+}
+
+document.getElementById('file-history').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try{
+      const obj = JSON.parse(ev.target.result);
+      Object.keys(obj).forEach(month=>{ window.__history[month] = obj[month]; });
+      refreshHistoryStatus();
+      renderTrendTable();
+    }catch(err){
+      document.getElementById('history-status').className='status-warn';
+      document.getElementById('history-status').textContent = '履歴ファイルの読み込みに失敗しました';
+    }
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-confirm').addEventListener('click', ()=>{
+  if(!window.__lastRows){ return; }
+  const month = document.getElementById('confirm-month').value; // "YYYY-MM"
+  if(!month){
+    document.getElementById('confirm-msg').textContent = '対象年月を選択してください';
+    return;
+  }
+  const snapshot = {};
+  STORE_LIST.forEach(s=>{ snapshot[s.pl] = {}; });
+  window.__lastRows.forEach(r=>{
+    snapshot[r.store][r.cat] = r.ratio;
+  });
+  window.__history[month] = snapshot;
+  refreshHistoryStatus();
+  renderTrendTable();
+
+  // 履歴ファイルをダウンロード
+  const blob = new Blob([JSON.stringify(window.__history, null, 1)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `原価率推移履歴.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+  document.getElementById('confirm-msg').textContent = `${month} を確定し、履歴ファイルを保存しました。`;
+});
+
+function populateTrendStoreFilter(){
+  const sel = document.getElementById('trend-store-filter');
+  if(sel.options.length>0) return; // already populated
+  const optAll = document.createElement('option');
+  optAll.value=''; optAll.textContent='全店舗';
+  sel.appendChild(optAll);
+  STORE_LIST.forEach(s=>{
+    const opt = document.createElement('option');
+    opt.value = s.pl; opt.textContent = s.pl;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', renderTrendTable);
+}
+populateTrendStoreFilter();
+
+function renderTrendTable(){
+  const months = Object.keys(window.__history).sort();
+  const trendCard = document.getElementById('trend-card');
+  if(months.length===0){ trendCard.style.display='none'; return; }
+  trendCard.style.display='block';
+
+  const filterStore = document.getElementById('trend-store-filter').value;
+  const ranges = (typeof currentRanges === 'function') ? currentRanges() : DEFAULT_RANGES_AS_FRACTION();
+
+  const storesToShow = filterStore ? [filterStore] : STORE_LIST.map(s=>s.pl);
+
+  let html = '<div class="table-outer"><table class="result"><thead><tr><th class="rowlabel">店舗 / カテゴリ</th>';
+  months.forEach(m=>{ html += `<th>${m}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  storesToShow.forEach(storeName=>{
+    html += `<tr class="blocktitle"><td class="rowlabel" colspan="${months.length+1}">${storeName}</td></tr>`;
+    CATS.forEach(cat=>{
+      html += `<tr><td class="rowlabel">${cat}</td>`;
+      months.forEach(m=>{
+        const rec = window.__history[m] && window.__history[m][storeName];
+        const v = rec ? rec[cat] : undefined;
+        if(v===undefined || v===null){
+          html += '<td class="blank">-</td>';
+        } else {
+          const [lo,hi] = ranges[cat] || [0,1];
+          const cls = (v<lo||v>hi) ? 'anomaly' : '';
+          html += `<td class="${cls}">${(v*100).toFixed(1)}%</td>`;
+        }
+      });
+      html += '</tr>';
+    });
+  });
+
+  html += '</tbody></table></div>';
+  document.getElementById('trend-table-area').innerHTML = html;
+}
+
+function DEFAULT_RANGES_AS_FRACTION(){
+  const r={};
+  CATS.forEach(cat=>{ r[cat] = DEFAULT_RANGES[cat].map(x=>x/100); });
+  return r;
+}
+
 document.getElementById('btn-calc').addEventListener('click', ()=>{
   document.getElementById('error-area').innerHTML='';
   try{
@@ -903,6 +1048,11 @@ document.getElementById('btn-calc').addEventListener('click', ()=>{
     window.__lastRows = rows;
     window.__lastRanges = ranges;
     document.getElementById('btn-download').style.display='inline-block';
+    document.getElementById('confirm-card').style.display='block';
+    if(!document.getElementById('confirm-month').value){
+      const now = new Date();
+      document.getElementById('confirm-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    }
     let warn = '';
     const missPL = plParsed.missingStores.length + plParsed.missingSalesLabels.length + plParsed.missingPurchaseLabels.length;
     const missInv = invEndParsed.missingStores.length + invBegParsed.missingStores.length + invEndParsed.missingCats.length + invBegParsed.missingCats.length;
