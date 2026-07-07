@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カテゴリ別 原価率分析ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --navy:#1F3864;
+    --navy-dk:#152645;
+    --paper:#F4F6F9;
+    --card:#FFFFFF;
+    --line:#DCE2EC;
+    --ink:#1B2333;
+    --ink-soft:#5B6577;
+    --gold:#C9A227;
+    --gold-soft:#FBF1D2;
+    --red:#9C0006;
+    --red-soft:#FFC7CE;
+    --green:#1B7A43;
+    --green-soft:#E2F3E7;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:24px 16px 64px;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Yu Gothic","Hiragino Sans","Noto Sans JP",-apple-system,BlinkMacSystemFont,sans-serif;
+  }
+  .wrap{max-width:1280px;margin:0 auto;}
+  header{margin-bottom:22px;}
+  h1{
+    margin:0 0 4px;
+    font-size:22px;
+    color:var(--navy);
+    letter-spacing:.01em;
+  }
+  .sub{margin:0;color:var(--ink-soft);font-size:13px;}
+
+  .grid2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:16px;
+  }
+  @media (max-width:820px){ .grid2{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px 20px;
+    box-shadow:0 1px 3px rgba(20,30,60,0.06);
+  }
+  .card h2{
+    margin:0 0 10px;
+    font-size:15px;
+    color:var(--navy);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .step-num{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:22px;height:22px;
+    border-radius:50%;
+    background:var(--navy);
+    color:#fff;
+    font-size:12px;
+    font-weight:bold;
+  }
+
+  .dropzone{
+    border:2px dashed var(--line);
+    border-radius:8px;
+    padding:22px 14px;
+    text-align:center;
+    cursor:pointer;
+    transition:.15s;
+    background:#FAFBFD;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--gold);
+    background:var(--gold-soft);
+  }
+  .dropzone input{display:none;}
+  .dropzone .fname{
+    margin-top:8px;
+    font-size:12.5px;
+    color:var(--navy);
+    font-weight:bold;
+    word-break:break-all;
+  }
+  .dropzone .hint{font-size:12px;color:var(--ink-soft);margin-top:4px;}
+
+  .sheet-row{
+    margin-top:12px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px 18px;
+    align-items:center;
+  }
+  .sheet-row label{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+  }
+  select, input[type=number], input[type=text]{
+    font-family:inherit;
+    font-size:13px;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:#fff;
+    color:var(--ink);
+  }
+  select{min-width:190px;}
+
+  .status-ok{color:var(--green);font-size:12px;font-weight:bold;}
+  .status-warn{color:var(--red);font-size:12px;font-weight:bold;}
+
+  details.adv{
+    margin-top:14px;
+    border-top:1px solid var(--line);
+    padding-top:10px;
+  }
+  details.adv summary{
+    cursor:pointer;
+    font-size:12.5px;
+    color:var(--navy);
+    font-weight:bold;
+  }
+  .adv-grid{
+    margin-top:10px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    gap:10px;
+  }
+  .adv-item{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:8px; background:#FAFBFD; border:1px solid var(--line); border-radius:6px; padding:6px 10px;
+  }
+  .adv-item span{font-size:12px;color:var(--ink-soft);}
+  .adv-item .rangepair{display:flex; gap:4px; align-items:center;}
+  .adv-item input{width:56px; text-align:right;}
+
+  .taxrow{margin-top:12px; display:flex; align-items:center; gap:10px;}
+  .taxrow input{width:70px;}
+
+  .calcbar{
+    display:flex; align-items:center; gap:14px; margin:20px 0 26px;
+  }
+  button.primary{
+    background:var(--navy);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:13px 32px;
+    font-size:15px;
+    font-weight:bold;
+    cursor:pointer;
+    transition:.15s;
+    letter-spacing:.02em;
+  }
+  button.primary:disabled{background:#B7C0D1; cursor:not-allowed;}
+  button.primary:not(:disabled):hover{background:var(--navy-dk);}
+  button.secondary{
+    background:#fff; color:var(--navy); border:1px solid var(--navy);
+    border-radius:8px; padding:10px 18px; font-size:13px; cursor:pointer; font-weight:bold;
+  }
+  button.secondary:hover{background:var(--gold-soft);}
+  .calc-msg{font-size:12.5px; color:var(--ink-soft);}
+
+  .summary-strip{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    margin-bottom:18px;
+  }
+  @media (max-width:820px){ .summary-strip{grid-template-columns:repeat(2,1fr);} }
+  .stat{
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px;
+  }
+  .stat .lbl{font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;}
+  .stat .val{font-size:20px; font-weight:bold; color:var(--navy);}
+  .stat.warn .val{color:var(--red);}
+
+  .table-outer{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:auto;
+    max-height:75vh;
+  }
+  table.result{
+    border-collapse:collapse;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  table.result th, table.result td{
+    border:1px solid var(--line);
+    padding:5px 7px;
+    text-align:right;
+  }
+  table.result thead th{
+    background:var(--navy);
+    color:#fff;
+    position:sticky;
+    top:0;
+    z-index:3;
+    text-align:center;
+    font-weight:bold;
+  }
+  table.result thead th.storehdr{
+    writing-mode:vertical-rl;
+    text-orientation:mixed;
+    max-height:130px;
+    font-size:11px;
+  }
+  table.result td.rowlabel, table.result th.rowlabel{
+    position:sticky;
+    left:0;
+    background:#fff;
+    text-align:left;
+    z-index:2;
+    font-weight:bold;
+    color:var(--navy);
+  }
+  table.result thead th.rowlabel{ background:var(--navy); color:#fff; z-index:4;}
+  tr.blocktitle td{
+    background:var(--gold-soft);
+    color:var(--navy);
+    font-weight:bold;
+    text-align:left;
+    position:sticky; left:0;
+  }
+  tr.total td{ background:#EEF1F7; font-weight:bold; }
+  td.anomaly{ background:var(--red-soft); color:var(--red); font-weight:bold; }
+  td.blank{ color:#C7CCD6; }
+
+  .footnote{font-size:11.5px; color:var(--ink-soft); margin:14px 4px 0;}
+  .error-box{
+    background:#FFF3F3; border:1px solid #F3B9BC; color:var(--red);
+    padding:10px 14px; border-radius:8px; font-size:12.5px; margin-top:10px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>カテゴリ別 原価率分析ツール</h1>
+  <p class="sub">PL表と店舗在庫一覧表をアップロードして「計算する」を押すだけで、店舗×カテゴリー別の原価率と異常値を確認できます。</p>
+  <p class="sub" style="margin-top:6px;">※ このツールは1つのHTMLファイルとして動作します。アップロードしたファイルはこの画面（ブラウザ）の中だけで処理され、どこにも送信・保存されません。Chrome または Edge での利用を推奨します。</p>
+</header>
+
+<div class="grid2">
+  <div class="card">
+    <h2><span class="step-num">1</span>PL表をアップロード（月次・店舗別）</h2>
+    <div class="dropzone" id="dz-pl">
+      <input type="file" id="file-pl" accept=".xlsx,.xls">
+      <div>ここにファイルをドラッグ、またはクリックして選択</div>
+      <div class="hint">例：23期PL表５月確認用.xlsx</div>
+      <div class="fname" id="fname-pl"></div>
+    </div>
+    <div class="sheet-row" id="pl-sheet-row" style="display:none;">
+      <label>対象月のシート
+        <select id="sel-pl-sheet"></select>
+      </label>
+      <span id="pl-status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-num">2</span>店舗在庫一覧表をアップロード（カテゴリー別）</h2>
+    <div class="dropzone" id="dz-inv">
+      <input type="file" id="file-inv" accept=".xlsx,.xls">
+      <div>ここにファイルをドラッグ、またはクリックして選択</div>
+      <div class="hint">例：店舗在庫一覧表.xlsx（複数月のシートを含むファイル）</div>
+      <div class="fname" id="fname-inv"></div>
+    </div>
+    <div class="sheet-row" id="inv-sheet-row" style="display:none;">
+      <label>期末（当月）シート
+        <select id="sel-inv-end"></select>
+      </label>
+      <label>期首（前月）シート
+        <select id="sel-inv-beg"></select>
+      </label>
+      <span id="inv-status"></span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2><span class="step-num">3</span>設定</h2>
+  <div class="taxrow">
+    <label style="font-size:13px;color:var(--ink-soft);">消費税率（在庫の税抜換算に使用・地金/テレカ金券は非課税のため対象外）</label>
+    <input type="number" id="tax-rate" value="10" min="0" max="30" step="1"> %
+  </div>
+  <details class="adv">
+    <summary>カテゴリー別「正常範囲」の詳細設定（クリックで開く）</summary>
+    <div class="adv-grid" id="range-grid"></div>
+  </details>
+</div>
+
+<div class="calcbar">
+  <button class="primary" id="btn-calc" disabled>計算する</button>
+  <button class="secondary" id="btn-download" style="display:none;">結果をExcelでダウンロード</button>
+  <span class="calc-msg" id="calc-msg">まずPL表・在庫表の両方をアップロードしてください</span>
+</div>
+
+<div id="error-area"></div>
+<div id="results"></div>
+
+<p class="footnote" id="global-footnote"></p>
+
+</div>
+
+<script>
+const SALES_LABELS = ['地金売上高','ジュエリー売上高','時計売上高','ブランド売上高','お酒売上高',
+ 'テレカ金券売上高','切手印紙売上高','ジュエリー業者売上高','ブランド業者売上高','時計業者売上高',
+ 'その他業者売上高','ジュエリーサブスク売上高','その他売上高'];
+const PURCHASE_LABELS = ['地金仕入高','ｼﾞｭｴﾘｰ店頭仕入','時計店頭仕入','ﾌﾞﾗﾝﾄﾞ店頭仕入','お酒店頭仕入',
+ 'テレカ金券仕入高','切手印紙仕入高','その他仕入高','ｼﾞｭｴﾘｰ業者仕入','時計業者仕入','ﾌﾞﾗﾝﾄﾞ業者仕入'];
+const INV_LABELS = ['サブスクジュエリー','ジュエリー','時計','市場仕入時計','ブランド','市場仕入ブランド',
+ '市場仕入ジュエリー','その他','テレカ・金券','切手(原価)','地金'];
+
+const CATS = ['地金','ジュエリー','時計','ブランド','テレカ金券','切手印紙','その他'];
+const CAT_MAP = {
+ '地金':      {sales:['地金売上高'], purchase:['地金仕入高'], inv:['地金']},
+ 'ジュエリー': {sales:['ジュエリー売上高','ジュエリー業者売上高'], purchase:['ｼﾞｭｴﾘｰ店頭仕入','ｼﾞｭｴﾘｰ業者仕入'], inv:['ジュエリー','市場仕入ジュエリー']},
+ '時計':      {sales:['時計売上高','時計業者売上高'], purchase:['時計店頭仕入','時計業者仕入'], inv:['時計','市場仕入時計']},
+ 'ブランド':   {sales:['ブランド売上高','ブランド業者売上高'], purchase:['ﾌﾞﾗﾝﾄﾞ店頭仕入','ﾌﾞﾗﾝﾄﾞ業者仕入'], inv:['ブランド','市場仕入ブランド']},
+ 'テレカ金券': {sales:['テレカ金券売上高'], purchase:['テレカ金券仕入高'], inv:['テレカ・金券']},
+ '切手印紙':   {sales:['切手印紙売上高'], purchase:['切手印紙仕入高'], inv:['切手(原価)']},
+ 'その他':     {sales:['お酒売上高','その他業者売上高','ジュエリーサブスク売上高','その他売上高'], purchase:['お酒店頭仕入','その他仕入高'], inv:['サブスクジュエリー','その他']},
+};
+const EXEMPT_CATS = ['地金','テレカ金券']; // 非課税のため在庫の税抜換算は行わない
+let DEFAULT_RANGES = {
+ '地金':[50,65], 'ジュエリー':[50,65], '時計':[50,65], 'ブランド':[50,65],
+ 'テレカ金券':[80,95], '切手印紙':[50,65], 'その他':[50,65],
+};
+
+const STORE_LIST = [
+ {pl:'web販売管理課', alt:['Web販売部'], inv:'web販売管理部'},
+ {pl:'WP川越クレアモール店', inv:'川越ｸﾚｱﾓｰﾙ店'},
+ {pl:'WP鶴ヶ島ワカバW店', inv:'ﾜｶﾊﾞｳｫｰｸ店'},
+ {pl:'WPAMむさし村山店', inv:'ｲｵﾝﾓｰﾙむさし村山店'},
+ {pl:'WP蒲田店', inv:'蒲田店'},
+ {pl:'WPチェリオ鹿島店', inv:'ﾁｭﾘｵ鹿島店'},
+ {pl:'WP松戸ST常盤平店', inv:'松戸ｾﾌﾞﾝﾀｳﾝ常盤平店'},
+ {pl:'WPAMつくば店', inv:'ｲｵﾝﾓｰﾙつくば店'},
+ {pl:'WPアリオ上尾店', inv:'ｱﾘｵ上尾店'},
+ {pl:'WPアリオ市原店', inv:'ｱﾘｵ市原店'},
+ {pl:'WPNEO所沢本店', inv:'NEO所沢本店'},
+ {pl:'WPAM羽生店', inv:'ｲｵﾝﾓｰﾙ羽生店'},
+ {pl:'WPココリア多摩CT店', inv:'ココリア多摩センター店'},
+ {pl:'WPイーアスつくば店', inv:'イーアスつくば店'},
+ {pl:'WPイオン板橋SC店', inv:'イオン板橋SC店'},
+ {pl:'WP久喜アリオ鷲宮店', inv:'WP久喜アリオ鷲宮店'},
+ {pl:'WPAM水戸内原店', inv:'WPAM水戸内原店'},
+ {pl:'WPAM幕張新都心店', inv:'幕張新都心店'},
+ {pl:'WP八王子イーアス高尾店', inv:'イーアス高尾店'},
+ {pl:'ｲﾄｰﾖｰｶﾄﾞｰ木場', inv:'ｲﾄｰﾖｰｶﾄﾞｰ木場店'},
+ {pl:'ｲｵﾝﾓｰﾙ座間', inv:'ｲｵﾝﾓｰﾙ座間店'},
+ {pl:'ｾﾌﾞﾝﾊﾟｰｸｱﾘｵ柏', inv:'ｾﾌﾞﾝﾊﾟｰｸｱﾘｵ柏店'},
+ {pl:'ｱﾘｵ橋本', inv:'ｱﾘｵ橋本店'},
+ {pl:'ｱﾘｵ北砂', inv:'ｱﾘｵ北砂店'},
+ {pl:'ｲｵﾝﾓｰﾙ春日部', inv:'ｲｵﾝﾓｰﾙ春日部店'},
+ {pl:'WP昭島モリタウン店', inv:'昭島モリタウン店'},
+ {pl:'WP港北トレッサ横浜店', alt:['WPトレッサ横浜店'], inv:'港北トレッサ横浜店'},
+ {pl:'WPセレオ国分寺店', alt:['セレオ国分寺'], inv:'セレオ国分寺店'},
+ {pl:'WPイオンモール大和店', alt:['イオンモール大和店'], inv:'イオンモール大和店'},
+ {pl:'WPララガーデン川口店', alt:['ララガーデン川口店'], inv:'ララガーデン川口店'},
+ {pl:'WPららぽーと新三郷店', alt:['ららぽーと新三郷'], inv:'ららぽーと新三郷店'},
+ {pl:'WPイオンモール川口店', alt:['イオンモール川口店'], inv:'イオンモール川口店'},
+ {pl:'WPアリオ亀有店', alt:['アリオ亀有店'], inv:'アリオ亀有店'},
+ {pl:'WPアズ熊谷店', alt:['アズ熊谷'], inv:'アズ熊谷店'},
+ {pl:'WPIY立場店', alt:['IY立場店'], inv:'IY立場店'},
+ {pl:'WPアリオ川口店', alt:['アリオ川口店'], inv:'アリオ川口店'},
+ {pl:'WPイオンモール高崎店', alt:['イオンモール高崎店'], inv:'イオンモール高崎店'},
+ {pl:'宅配ゴールドプライス', inv:'宅配ＧＰ'},
+ {pl:'新\u3000ららぽーとTOKYO-BAY店', inv:'WPららぽーとTOKYO-BAY店'},
+];
+function plAliases(s){ return [s.pl, ...(s.alt||[])]; }
+
+let plWorkbook=null, invWorkbook=null;
+let plParsed=null, invEndParsed=null, invBegParsed=null;
+
+function norm(v){ return (v===null||v===undefined) ? '' : v.toString().trim(); }
+
+function sheetToMatrix(wb, sheetName){
+  const ws = wb.Sheets[sheetName];
+  return XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+}
+
+// ---------- PL parsing ----------
+function findHeaderRowPL(matrix){
+  let best=-1, bestCount=-1;
+  for(let r=0;r<matrix.length;r++){
+    const row = matrix[r]||[];
+    let count=0;
+    for(const s of STORE_LIST){ if(row.some(v=>plAliases(s).includes(norm(v)))) count++; }
+    if(count>bestCount){ bestCount=count; best=r; }
+  }
+  return {rowIdx:best, count:bestCount};
+}
+function buildColMapPL(matrix, headerRowIdx){
+  const row = matrix[headerRowIdx]||[];
+  const map={};
+  STORE_LIST.forEach(s=>{
+    map[s.pl] = row.findIndex(v=>plAliases(s).includes(norm(v)));
+  });
+  return map;
+}
+function findLabelRows(matrix, labels){
+  const map={};
+  for(let r=0;r<matrix.length;r++){
+    const row=matrix[r]||[];
+    for(let c=0;c<4;c++){
+      const text = norm(row[c]);
+      if(text && labels.includes(text) && !(text in map)) map[text]=r;
+    }
+  }
+  return map;
+}
+function parsePL(sheetName){
+  const matrix = sheetToMatrix(plWorkbook, sheetName);
+  const {rowIdx:headerRow, count} = findHeaderRowPL(matrix);
+  const colMap = buildColMapPL(matrix, headerRow);
+  const salesRows = findLabelRows(matrix, SALES_LABELS);
+  const purchaseRows = findLabelRows(matrix, PURCHASE_LABELS);
+  const missingStores = STORE_LIST.filter(s=>colMap[s.pl]<0).map(s=>s.pl);
+  const missingSalesLabels = SALES_LABELS.filter(l=>!(l in salesRows));
+  const missingPurchaseLabels = PURCHASE_LABELS.filter(l=>!(l in purchaseRows));
+  const result = {};
+  STORE_LIST.forEach(s=>{
+    const col = colMap[s.pl];
+    const rec = {sales:{}, purchase:{}};
+    SALES_LABELS.forEach(l=>{
+      const r = salesRows[l];
+      rec.sales[l] = (r!==undefined && col>=0) ? (Number(matrix[r][col])||0) : 0;
+    });
+    PURCHASE_LABELS.forEach(l=>{
+      const r = purchaseRows[l];
+      rec.purchase[l] = (r!==undefined && col>=0) ? (Number(matrix[r][col])||0) : 0;
+    });
+    result[s.pl] = rec;
+  });
+  return {result, headerRow, matchCount:count, missingStores, missingSalesLabels, missingPurchaseLabels};
+}
+
+// ---------- Inventory parsing ----------
+function findHeaderRowInv(matrix){
+  let best=-1, bestCount=-1;
+  for(let r=0;r<matrix.length;r++){
+    const row=matrix[r]||[];
+    let count=0;
+    for(const l of INV_LABELS){ if(row.some(v=>norm(v)===l)) count++; }
+    if(count>bestCount){ bestCount=count; best=r; }
+  }
+  return {rowIdx:best, count:bestCount};
+}
+function buildColMapInv(matrix, headerRowIdx){
+  const row = matrix[headerRowIdx]||[];
+  const map={};
+  INV_LABELS.forEach(l=>{ map[l] = row.findIndex(v=>norm(v)===l); });
+  return map;
+}
+function findStoreRowsInv(matrix, headerRowIdx){
+  const map={};
+  for(let r=headerRowIdx+1;r<matrix.length;r++){
+    const row = matrix[r];
+    if(!row) continue;
+    const text = norm(row[0]);
+    if(!text) continue;
+    STORE_LIST.forEach(s=>{ if(text===s.inv && !(s.inv in map)) map[s.inv]=r; });
+  }
+  return map;
+}
+function parseInv(sheetName){
+  const matrix = sheetToMatrix(invWorkbook, sheetName);
+  const {rowIdx:headerRow, count} = findHeaderRowInv(matrix);
+  const colMap = buildColMapInv(matrix, headerRow);
+  const storeRows = findStoreRowsInv(matrix, headerRow);
+  const missingStores = STORE_LIST.filter(s=>!(s.inv in storeRows)).map(s=>s.pl);
+  const missingCats = INV_LABELS.filter(l=>colMap[l]<0);
+  const result = {};
+  STORE_LIST.forEach(s=>{
+    const r = storeRows[s.inv];
+    const rec={};
+    INV_LABELS.forEach(l=>{
+      const c = colMap[l];
+      rec[l] = (r!==undefined && c>=0) ? (Number(matrix[r][c])||0) : 0;
+    });
+    result[s.pl]=rec;
+  });
+  return {result, headerRow, matchCount:count, missingStores, missingCats};
+}
+
+// ---------- UI wiring: file inputs ----------
+function setupDropzone(dzId, inputId, onFile){
+  const dz = document.getElementById(dzId);
+  const input = document.getElementById(inputId);
+  dz.addEventListener('click', ()=>input.click());
+  input.addEventListener('change', e=>{ if(e.target.files[0]) onFile(e.target.files[0]); });
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', ()=> dz.classList.remove('drag'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.classList.remove('drag');
+    if(e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+  });
+}
+
+function readWorkbook(file, cb){
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    const data = new Uint8Array(ev.target.result);
+    const wb = XLSX.read(data, {type:'array', cellDates:false});
+    cb(wb);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function populateSelect(sel, names, defaultIdx){
+  sel.innerHTML='';
+  names.forEach((n,i)=>{
+    const opt=document.createElement('option');
+    opt.value=n; opt.textContent=n;
+    sel.appendChild(opt);
+  });
+  sel.selectedIndex = defaultIdx;
+}
+
+setupDropzone('dz-pl','file-pl', file=>{
+  document.getElementById('fname-pl').textContent = file.name;
+  readWorkbook(file, wb=>{
+    plWorkbook = wb;
+    const row = document.getElementById('pl-sheet-row');
+    row.style.display='flex';
+    const sel = document.getElementById('sel-pl-sheet');
+    populateSelect(sel, wb.SheetNames, wb.SheetNames.length-1);
+    validatePL();
+    sel.onchange = validatePL;
+    checkReady();
+  });
+});
+
+setupDropzone('dz-inv','file-inv', file=>{
+  document.getElementById('fname-inv').textContent = file.name;
+  readWorkbook(file, wb=>{
+    invWorkbook = wb;
+    const row = document.getElementById('inv-sheet-row');
+    row.style.display='flex';
+    const selEnd = document.getElementById('sel-inv-end');
+    const selBeg = document.getElementById('sel-inv-beg');
+    const n = wb.SheetNames.length;
+    populateSelect(selEnd, wb.SheetNames, n-1);
+    populateSelect(selBeg, wb.SheetNames, Math.max(0,n-2));
+    validateInv();
+    selEnd.onchange = validateInv;
+    selBeg.onchange = validateInv;
+    checkReady();
+  });
+});
+
+function validatePL(){
+  const sheetName = document.getElementById('sel-pl-sheet').value;
+  const parsed = parsePL(sheetName);
+  plParsed = parsed;
+  const status = document.getElementById('pl-status');
+  if(parsed.missingStores.length>3 || parsed.missingSalesLabels.length>2){
+    status.className='status-warn';
+    status.textContent = `店舗一致 ${STORE_LIST.length-parsed.missingStores.length}/${STORE_LIST.length}・見つからない項目があります`;
+  } else {
+    status.className='status-ok';
+    status.textContent = `読込OK（店舗一致 ${STORE_LIST.length-parsed.missingStores.length}/${STORE_LIST.length}）`;
+  }
+  checkReady();
+}
+function validateInv(){
+  const sheetEnd = document.getElementById('sel-inv-end').value;
+  const sheetBeg = document.getElementById('sel-inv-beg').value;
+  invEndParsed = parseInv(sheetEnd);
+  invBegParsed = parseInv(sheetBeg);
+  const status = document.getElementById('inv-status');
+  const missing = Math.max(invEndParsed.missingStores.length, invBegParsed.missingStores.length);
+  if(missing>3){
+    status.className='status-warn';
+    status.textContent = `店舗一致 ${STORE_LIST.length-missing}/${STORE_LIST.length}・見つからない項目があります`;
+  } else {
+    status.className='status-ok';
+    status.textContent = `読込OK（店舗一致 ${STORE_LIST.length-missing}/${STORE_LIST.length}）`;
+  }
+  checkReady();
+}
+function checkReady(){
+  const btn = document.getElementById('btn-calc');
+  const msg = document.getElementById('calc-msg');
+  if(plParsed && invEndParsed && invBegParsed){
+    btn.disabled=false;
+    msg.textContent = '準備ができました。内容を確認のうえ「計算する」を押してください。';
+  } else {
+    btn.disabled=true;
+    msg.textContent = 'まずPL表・在庫表の両方をアップロードしてください';
+  }
+}
+
+// ---------- Advanced settings: normal range grid ----------
+function buildRangeGrid(){
+  const grid = document.getElementById('range-grid');
+  grid.innerHTML='';
+  CATS.forEach(cat=>{
+    const div = document.createElement('div');
+    div.className='adv-item';
+    div.innerHTML = `<span>${cat}</span><div class="rangepair">
+      <input type="number" data-cat="${cat}" data-b="lo" value="${DEFAULT_RANGES[cat][0]}">%〜
+      <input type="number" data-cat="${cat}" data-b="hi" value="${DEFAULT_RANGES[cat][1]}">%</div>`;
+    grid.appendChild(div);
+  });
+}
+buildRangeGrid();
+function currentRanges(){
+  const ranges={};
+  CATS.forEach(cat=>{
+    const lo = Number(document.querySelector(`input[data-cat="${cat}"][data-b="lo"]`).value)/100;
+    const hi = Number(document.querySelector(`input[data-cat="${cat}"][data-b="hi"]`).value)/100;
+    ranges[cat]=[lo,hi];
+  });
+  return ranges;
+}
+
+// ---------- Compute ----------
+function computeAll(taxRatePct){
+  const taxRate = taxRatePct/100;
+  const rows=[];
+  STORE_LIST.forEach(s=>{
+    const pl = plParsed.result[s.pl];
+    const beg = invBegParsed.result[s.pl];
+    const end = invEndParsed.result[s.pl];
+    CATS.forEach(cat=>{
+      const m = CAT_MAP[cat];
+      const sales = m.sales.reduce((a,l)=>a+(pl.sales[l]||0),0);
+      const purchase = m.purchase.reduce((a,l)=>a+(pl.purchase[l]||0),0);
+      const begRaw = m.inv.reduce((a,l)=>a+(beg[l]||0),0);
+      const endRaw = m.inv.reduce((a,l)=>a+(end[l]||0),0);
+      const factor = EXEMPT_CATS.includes(cat) ? 1 : (1+taxRate);
+      const begAdj = begRaw/factor;
+      const endAdj = endRaw/factor;
+      const invChange = endAdj - begAdj;
+      const cogs = begAdj + purchase - endAdj;
+      const ratio = sales>0 ? cogs/sales : null;
+      rows.push({store:s.pl, cat, sales, purchase, beg:begAdj, end:endAdj, invChange, cogs, ratio});
+    });
+  });
+  return rows;
+}
+
+function fmtInt(v){ return Math.round(v).toLocaleString('ja-JP'); }
+function fmtPct(v){ return v===null ? '' : (v*100).toFixed(1)+'%'; }
+
+function renderResults(rows, ranges){
+  const byKey = {};
+  rows.forEach(r=> byKey[r.store+'|'+r.cat]=r );
+
+  let totalSales=0, totalCogs=0, anomalyCount=0, evaluatedCount=0;
+  rows.forEach(r=>{
+    totalSales+=r.sales; totalCogs+=r.cogs;
+    if(r.ratio!==null){
+      evaluatedCount++;
+      const [lo,hi]=ranges[r.cat];
+      if(r.ratio<lo || r.ratio>hi) anomalyCount++;
+    }
+  });
+  const overallRatio = totalSales>0 ? totalCogs/totalSales : null;
+
+  const blocks = [
+    {title:'売上高（税抜）', key:'sales', fmt:fmtInt, isRatio:false},
+    {title:'仕入高', key:'purchase', fmt:fmtInt, isRatio:false},
+    {title:'在庫増減（税抜換算後・期末－期首）', key:'invChange', fmt:fmtInt, isRatio:false},
+    {title:'売上原価', key:'cogs', fmt:fmtInt, isRatio:false},
+    {title:'原価率', key:'ratio', fmt:fmtPct, isRatio:true},
+  ];
+
+  let html = '';
+  html += `<div class="summary-strip">
+    <div class="stat"><div class="lbl">合計売上高（税抜）</div><div class="val">¥${fmtInt(totalSales)}</div></div>
+    <div class="stat"><div class="lbl">合計売上原価</div><div class="val">¥${fmtInt(totalCogs)}</div></div>
+    <div class="stat"><div class="lbl">全体原価率</div><div class="val">${overallRatio===null?'-':fmtPct(overallRatio)}</div></div>
+    <div class="stat ${anomalyCount>0?'warn':''}"><div class="lbl">正常範囲外の件数</div><div class="val">${anomalyCount} / ${evaluatedCount}</div></div>
+  </div>`;
+
+  html += '<div class="table-outer"><table class="result"><thead><tr><th class="rowlabel">カテゴリ</th>';
+  STORE_LIST.forEach(s=>{ html += `<th class="storehdr">${s.pl}</th>`; });
+  html += '<th>下限</th><th>上限</th></tr></thead><tbody>';
+
+  blocks.forEach(block=>{
+    html += `<tr class="blocktitle"><td class="rowlabel" colspan="${STORE_LIST.length+3}">${block.title}</td></tr>`;
+    CATS.forEach(cat=>{
+      html += `<tr><td class="rowlabel">${cat}</td>`;
+      let rowTotal=0;
+      STORE_LIST.forEach(s=>{
+        const r = byKey[s.pl+'|'+cat];
+        const v = r[block.key];
+        rowTotal += (v===null?0:v);
+        let cls='';
+        if(block.isRatio){
+          if(v===null){ html += `<td class="blank">-</td>`; return; }
+          const [lo,hi]=ranges[cat];
+          cls = (v<lo||v>hi) ? 'anomaly' : '';
+          html += `<td class="${cls}">${block.fmt(v)}</td>`;
+        } else {
+          html += `<td>${block.fmt(v)}</td>`;
+        }
+      });
+      if(block.isRatio){
+        const [lo,hi]=ranges[cat];
+        html += `<td>${(lo*100).toFixed(0)}%</td><td>${(hi*100).toFixed(0)}%</td>`;
+      } else {
+        html += `<td></td><td></td>`;
+      }
+      html += '</tr>';
+    });
+    // total row
+    html += `<tr class="total"><td class="rowlabel">合計</td>`;
+    STORE_LIST.forEach(s=>{
+      if(block.key==='ratio'){
+        const s_sales = CATS.reduce((a,cat)=>a+byKey[s.pl+'|'+cat].sales,0);
+        const s_cogs = CATS.reduce((a,cat)=>a+byKey[s.pl+'|'+cat].cogs,0);
+        const v = s_sales>0 ? s_cogs/s_sales : null;
+        html += `<td>${v===null?'-':fmtPct(v)}</td>`;
+      } else {
+        const v = CATS.reduce((a,cat)=>a+byKey[s.pl+'|'+cat][block.key],0);
+        html += `<td>${fmtInt(v)}</td>`;
+      }
+    });
+    html += `<td></td><td></td></tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  html += `<p class="footnote">赤色のセルは、カテゴリーごとに設定した「正常範囲」を外れた原価率です。範囲は上部の「正常範囲の詳細設定」から調整できます。</p>`;
+
+  document.getElementById('results').innerHTML = html;
+}
+
+function buildExportAOA(rows, ranges){
+  const byKey = {};
+  rows.forEach(r=> byKey[r.store+'|'+r.cat]=r );
+  const storeNames = STORE_LIST.map(s=>s.pl);
+
+  const aoa = [];
+  aoa.push(['カテゴリー別 原価率分析（税抜ベース）']);
+  aoa.push([]);
+  aoa.push(['カテゴリ', ...storeNames, '下限','上限']);
+
+  function addBlock(title, key, isRatio){
+    aoa.push(['■ '+title]);
+    CATS.forEach(cat=>{
+      const line = [cat];
+      storeNames.forEach(name=>{
+        const r = byKey[name+'|'+cat];
+        const v = r[key];
+        line.push(v===null ? '' : v);
+      });
+      if(isRatio){
+        const [lo,hi]=ranges[cat];
+        line.push(lo, hi);
+      } else {
+        line.push('', '');
+      }
+      aoa.push(line);
+    });
+    const totalLine = ['合計'];
+    storeNames.forEach(name=>{
+      if(key==='ratio'){
+        const s_sales = CATS.reduce((a,cat)=>a+byKey[name+'|'+cat].sales,0);
+        const s_cogs = CATS.reduce((a,cat)=>a+byKey[name+'|'+cat].cogs,0);
+        totalLine.push(s_sales>0 ? s_cogs/s_sales : '');
+      } else {
+        totalLine.push(CATS.reduce((a,cat)=>a+byKey[name+'|'+cat][key],0));
+      }
+    });
+    totalLine.push('','');
+    aoa.push(totalLine);
+    aoa.push([]);
+  }
+
+  addBlock('売上高（税抜）','sales',false);
+  addBlock('仕入高','purchase',false);
+  addBlock('在庫増減（税抜換算後・期末－期首）','invChange',false);
+  addBlock('売上原価','cogs',false);
+  addBlock('原価率','ratio',true);
+
+  // 判定 block (since plain xlsx export can't carry cell color, show a text flag instead)
+  aoa.push(['■ 判定（正常範囲外は「異常」と表示）']);
+  CATS.forEach(cat=>{
+    const line=[cat];
+    const [lo,hi]=ranges[cat];
+    let cnt=0;
+    storeNames.forEach(name=>{
+      const r = byKey[name+'|'+cat];
+      if(r.ratio===null){ line.push(''); return; }
+      const out = (r.ratio<lo || r.ratio>hi);
+      if(out) cnt++;
+      line.push(out ? '異常' : '');
+    });
+    line.push(lo,hi);
+    aoa.push(line);
+  });
+  aoa.push([]);
+  return aoa;
+}
+
+function exportExcel(){
+  if(!window.__lastRows) return;
+  const aoa = buildExportAOA(window.__lastRows, window.__lastRanges);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:24}, ...STORE_LIST.map(()=>({wch:11})), {wch:8}, {wch:8}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '原価率分析結果');
+  const today = new Date();
+  const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `原価率分析結果_${ymd}.xlsx`);
+}
+document.getElementById('btn-download').addEventListener('click', exportExcel);
+
+document.getElementById('btn-calc').addEventListener('click', ()=>{
+  document.getElementById('error-area').innerHTML='';
+  try{
+    const taxRate = Number(document.getElementById('tax-rate').value)||0;
+    const ranges = currentRanges();
+    const rows = computeAll(taxRate);
+    renderResults(rows, ranges);
+    window.__lastRows = rows;
+    window.__lastRanges = ranges;
+    document.getElementById('btn-download').style.display='inline-block';
+    let warn = '';
+    const missPL = plParsed.missingStores.length + plParsed.missingSalesLabels.length + plParsed.missingPurchaseLabels.length;
+    const missInv = invEndParsed.missingStores.length + invBegParsed.missingStores.length + invEndParsed.missingCats.length + invBegParsed.missingCats.length;
+    if(missPL>0 || missInv>0){
+      warn = '一部の店舗・項目が自動検出できませんでした（該当箇所は0円として計算しています）。ファイルのシート構成が想定と異なる可能性があります。';
+      document.getElementById('error-area').innerHTML = `<div class="error-box">${warn}</div>`;
+    }
+  }catch(e){
+    document.getElementById('error-area').innerHTML = `<div class="error-box">計算中にエラーが発生しました：${e.message}</div>`;
+    console.error(e);
+  }
+});
+</script>
+</body>
+</html>
