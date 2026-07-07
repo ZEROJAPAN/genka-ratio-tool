@@ -265,7 +265,7 @@
 (function(){
   // ごく簡易的な入室制限です。ページのソースを見れば誰でも突破できるため、
   // 本当に機密性が必要なデータには使わないでください。
-   var PASSWORD_HASH_TARGET = "4eb48c72cba00110b9f0e7e4f6dfc6f4a0140fd8"; // パスワード: zero2002
+  var PASSWORD_HASH_TARGET = "4eb48c72cba00110b9f0e7e4f6dfc6f4a0140fd8"; // パスワード: zero2002
 
   async function sha1Hex(msg){
     var enc = new TextEncoder().encode(msg);
@@ -343,7 +343,7 @@
 <div class="card">
   <h2><span class="step-num">3</span>設定</h2>
   <div class="taxrow">
-    <label style="font-size:13px;color:var(--ink-soft);">消費税率（在庫の税抜換算に使用・地金/テレカ金券は非課税のため対象外）</label>
+    <label style="font-size:13px;color:var(--ink-soft);">消費税率（在庫の税抜換算に使用・テレカ金券は非課税のため対象外）</label>
     <input type="number" id="tax-rate" value="10" min="0" max="30" step="1"> %
   </div>
   <details class="adv">
@@ -384,7 +384,7 @@ const CAT_MAP = {
  '切手印紙':   {sales:['切手印紙売上高'], purchase:['切手印紙仕入高'], inv:['切手(原価)']},
  'その他':     {sales:['お酒売上高','その他業者売上高','ジュエリーサブスク売上高','その他売上高'], purchase:['お酒店頭仕入','その他仕入高'], inv:['サブスクジュエリー','その他']},
 };
-const EXEMPT_CATS = ['地金','テレカ金券']; // 非課税のため在庫の税抜換算は行わない
+const EXEMPT_CATS = ['テレカ金券']; // 非課税のため在庫の税抜換算は行わない
 let DEFAULT_RANGES = {
  '地金':[50,65], 'ジュエリー':[50,65], '時計':[50,65], 'ブランド':[50,65],
  'テレカ金券':[80,95], '切手印紙':[50,65], 'その他':[50,65],
@@ -792,46 +792,73 @@ function renderResults(rows, ranges){
   document.getElementById('results').innerHTML = html;
 }
 
-function buildExportAOA(rows, ranges){
+function tdNum(v, isRatio){
+  if(v===null || v===''){
+    return `<td style="border:1px solid #999;padding:4px 6px;"></td>`;
+  }
+  const fmt = isRatio ? "0.0%" : "#,##0";
+  return `<td style="border:1px solid #999;padding:4px 6px;text-align:right;mso-number-format:'${fmt}';">${v}</td>`;
+}
+
+function buildExportHTML(rows, ranges){
   const byKey = {};
   rows.forEach(r=> byKey[r.store+'|'+r.cat]=r );
   const storeNames = STORE_LIST.map(s=>s.pl);
 
-  const aoa = [];
-  aoa.push(['カテゴリー別 原価率分析（税抜ベース）']);
-  aoa.push([]);
-  aoa.push(['カテゴリ', ...storeNames, '下限','上限']);
+  let html = `<table border="1" style="border-collapse:collapse;font-family:Meiryo,sans-serif;font-size:11px;">`;
+  html += `<tr><td colspan="${storeNames.length+3}" style="font-size:14px;font-weight:bold;padding:6px;border:none;">カテゴリー別 原価率分析結果（税抜ベース）</td></tr>`;
+  html += `<tr><td style="border:none;"></td></tr>`;
+
+  function headerRow(){
+    let h = `<tr><th style="border:1px solid #999;background:#1F3864;color:#fff;padding:4px 6px;">カテゴリ</th>`;
+    storeNames.forEach(n=>{ h += `<th style="border:1px solid #999;background:#1F3864;color:#fff;padding:4px 2px;font-size:9px;white-space:nowrap;">${n}</th>`; });
+    h += `<th style="border:1px solid #999;background:#1F3864;color:#fff;padding:4px 6px;">下限</th><th style="border:1px solid #999;background:#1F3864;color:#fff;padding:4px 6px;">上限</th></tr>`;
+    return h;
+  }
+  html += headerRow();
 
   function addBlock(title, key, isRatio){
-    aoa.push(['■ '+title]);
+    html += `<tr><td colspan="${storeNames.length+3}" style="background:#FFF2CC;color:#1F3864;font-weight:bold;padding:5px 6px;border:1px solid #999;">■ ${title}</td></tr>`;
     CATS.forEach(cat=>{
-      const line = [cat];
+      const [lo,hi] = ranges[cat];
+      html += `<tr><td style="border:1px solid #999;padding:4px 6px;font-weight:bold;color:#1F3864;">${cat}</td>`;
       storeNames.forEach(name=>{
         const r = byKey[name+'|'+cat];
         const v = r[key];
-        line.push(v===null ? '' : v);
+        if(isRatio && v!==null){
+          const out = (v<lo || v>hi);
+          const style = out
+            ? "border:1px solid #999;padding:4px 6px;text-align:right;font-weight:bold;background:#FFC7CE;color:#9C0006;mso-number-format:'0.0%';"
+            : "border:1px solid #999;padding:4px 6px;text-align:right;mso-number-format:'0.0%';";
+          html += `<td style="${style}">${v}</td>`;
+        } else {
+          html += tdNum(v, isRatio);
+        }
       });
       if(isRatio){
-        const [lo,hi]=ranges[cat];
-        line.push(lo, hi);
+        html += tdNum(lo, true) + tdNum(hi, true);
       } else {
-        line.push('', '');
+        html += `<td style="border:1px solid #999;"></td><td style="border:1px solid #999;"></td>`;
       }
-      aoa.push(line);
+      html += `</tr>`;
     });
-    const totalLine = ['合計'];
+    // total row
+    html += `<tr><td style="border:1px solid #999;padding:4px 6px;font-weight:bold;background:#EEF1F7;">合計</td>`;
     storeNames.forEach(name=>{
+      let v;
       if(key==='ratio'){
         const s_sales = CATS.reduce((a,cat)=>a+byKey[name+'|'+cat].sales,0);
         const s_cogs = CATS.reduce((a,cat)=>a+byKey[name+'|'+cat].cogs,0);
-        totalLine.push(s_sales>0 ? s_cogs/s_sales : '');
+        v = s_sales>0 ? s_cogs/s_sales : null;
       } else {
-        totalLine.push(CATS.reduce((a,cat)=>a+byKey[name+'|'+cat][key],0));
+        v = CATS.reduce((a,cat)=>a+byKey[name+'|'+cat][key],0);
       }
+      const fmt = isRatio ? "0.0%" : "#,##0";
+      html += v===null ? `<td style="border:1px solid #999;background:#EEF1F7;"></td>` :
+        `<td style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:bold;background:#EEF1F7;mso-number-format:'${fmt}';">${v}</td>`;
     });
-    totalLine.push('','');
-    aoa.push(totalLine);
-    aoa.push([]);
+    html += `<td style="border:1px solid #999;background:#EEF1F7;"></td><td style="border:1px solid #999;background:#EEF1F7;"></td></tr>`;
+    html += `<tr><td colspan="${storeNames.length+3}" style="border:none;height:8px;"></td></tr>`;
   }
 
   addBlock('売上高（税抜）','sales',false);
@@ -840,38 +867,31 @@ function buildExportAOA(rows, ranges){
   addBlock('売上原価','cogs',false);
   addBlock('原価率','ratio',true);
 
-  // 判定 block (since plain xlsx export can't carry cell color, show a text flag instead)
-  aoa.push(['■ 判定（正常範囲外は「異常」と表示）']);
-  CATS.forEach(cat=>{
-    const line=[cat];
-    const [lo,hi]=ranges[cat];
-    let cnt=0;
-    storeNames.forEach(name=>{
-      const r = byKey[name+'|'+cat];
-      if(r.ratio===null){ line.push(''); return; }
-      const out = (r.ratio<lo || r.ratio>hi);
-      if(out) cnt++;
-      line.push(out ? '異常' : '');
-    });
-    line.push(lo,hi);
-    aoa.push(line);
-  });
-  aoa.push([]);
-  return aoa;
+  html += `<tr><td colspan="${storeNames.length+3}" style="border:none;font-size:10px;color:#666;padding-top:6px;">※赤色のセルは、カテゴリーごとの「正常範囲」を外れた原価率です。</td></tr>`;
+  html += `</table>`;
+  return html;
 }
 
 function exportExcel(){
   if(!window.__lastRows) return;
-  const aoa = buildExportAOA(window.__lastRows, window.__lastRanges);
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{wch:24}, ...STORE_LIST.map(()=>({wch:11})), {wch:8}, {wch:8}];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '原価率分析結果');
+  const bodyHtml = buildExportHTML(window.__lastRows, window.__lastRanges);
+  const fullHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+  <x:Name>原価率分析結果</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+  </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+  <body>${bodyHtml}</body></html>`;
+  const blob = new Blob(['\ufeff' + fullHtml], {type:'application/vnd.ms-excel'});
   const today = new Date();
   const ymd = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-  XLSX.writeFile(wb, `原価率分析結果_${ymd}.xlsx`);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `原価率分析結果_${ymd}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 document.getElementById('btn-download').addEventListener('click', exportExcel);
+
 
 document.getElementById('btn-calc').addEventListener('click', ()=>{
   document.getElementById('error-area').innerHTML='';
